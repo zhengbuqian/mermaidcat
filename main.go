@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 var (
@@ -30,54 +33,121 @@ func main() {
 	}
 	flag.Parse()
 
-	input, tmpFile, err := resolveInput()
+	inputs, tmpFiles, err := resolveInput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	if tmpFile != "" {
-		defer os.Remove(tmpFile)
-	}
+	defer func() {
+		for _, f := range tmpFiles {
+			os.Remove(f)
+		}
+	}()
 
 	mermaidTheme := resolveTheme()
 
-	if err := render(input, mermaidTheme); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	for i, input := range inputs {
+		outPath := ""
+		if *output != "" {
+			if len(inputs) == 1 {
+				outPath = *output
+			} else {
+				ext := filepath.Ext(*output)
+				base := strings.TrimSuffix(*output, ext)
+				outPath = fmt.Sprintf("%s-%d%s", base, i+1, ext)
+			}
+		}
+		if err := render(input, mermaidTheme, outPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
-// resolveInput returns (inputPath, tmpFilePath, error).
-// tmpFilePath is non-empty when a temp file was created and needs cleanup.
-func resolveInput() (string, string, error) {
-	// -e flag: write string to temp file
+// resolveInput returns (inputPaths, tmpFilePaths, error).
+func resolveInput() ([]string, []string, error) {
+	var data []byte
+
 	if *expr != "" {
-		return writeTemp([]byte(*expr))
-	}
-
-	// positional argument: use file directly
-	if flag.NArg() > 0 {
+		data = []byte(*expr)
+	} else if flag.NArg() > 0 {
 		path := flag.Arg(0)
-		if _, err := os.Stat(path); err != nil {
-			return "", "", fmt.Errorf("file not found: %s", path)
-		}
-		return path, "", nil
-	}
-
-	// stdin
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		data, err := io.ReadAll(os.Stdin)
+		var err error
+		data, err = os.ReadFile(path)
 		if err != nil {
-			return "", "", fmt.Errorf("reading stdin: %w", err)
+			return nil, nil, fmt.Errorf("reading file %s: %w", path, err)
 		}
-		if len(data) == 0 {
-			return "", "", fmt.Errorf("empty input from stdin")
+	} else {
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			var err error
+			data, err = io.ReadAll(os.Stdin)
+			if err != nil {
+				return nil, nil, fmt.Errorf("reading stdin: %w", err)
+			}
+		} else {
+			return nil, nil, fmt.Errorf("no input provided. Use: mermaidcat <file>, -e <string>, or pipe via stdin")
 		}
-		return writeTemp(data)
 	}
 
-	return "", "", fmt.Errorf("no input provided. Use: mermaidcat <file>, -e <string>, or pipe via stdin")
+	if len(data) == 0 {
+		return nil, nil, fmt.Errorf("empty input")
+	}
+
+	// Try extracting mermaid blocks from markdown
+	blocks := extractMermaidBlocks(string(data))
+	if len(blocks) > 0 {
+		var paths, tmps []string
+		for _, block := range blocks {
+			p, t, err := writeTemp([]byte(block))
+			if err != nil {
+				for _, tmp := range tmps {
+					os.Remove(tmp)
+				}
+				return nil, nil, err
+			}
+			paths = append(paths, p)
+			tmps = append(tmps, t)
+		}
+		return paths, tmps, nil
+	}
+
+	// Treat as raw mermaid input
+	p, t, err := writeTemp(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return []string{p}, []string{t}, nil
+}
+
+// extractMermaidBlocks extracts content from ```mermaid code blocks.
+func extractMermaidBlocks(content string) []string {
+	var blocks []string
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	var current strings.Builder
+	inBlock := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if !inBlock && (trimmed == "```mermaid" || strings.HasPrefix(trimmed, "```mermaid ")) {
+			inBlock = true
+			current.Reset()
+			continue
+		}
+		if inBlock && trimmed == "```" {
+			if current.Len() > 0 {
+				blocks = append(blocks, current.String())
+			}
+			inBlock = false
+			continue
+		}
+		if inBlock {
+			current.WriteString(line)
+			current.WriteByte('\n')
+		}
+	}
+	return blocks
 }
 
 func writeTemp(data []byte) (string, string, error) {

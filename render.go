@@ -7,7 +7,7 @@ import (
 	"os/exec"
 )
 
-func render(inputPath, mermaidTheme string) error {
+func render(inputPath, mermaidTheme, outPath string) error {
 	if _, err := exec.LookPath("mmdc"); err != nil {
 		return fmt.Errorf("mmdc not found, install via: npm install -g @mermaid-js/mermaid-cli")
 	}
@@ -38,8 +38,8 @@ func render(inputPath, mermaidTheme string) error {
 	var chafaInput io.Reader = mmdcOut
 
 	var outFile *os.File
-	if *output != "" {
-		outFile, err = os.Create(*output)
+	if outPath != "" {
+		outFile, err = os.Create(outPath)
 		if err != nil {
 			return fmt.Errorf("creating output file: %w", err)
 		}
