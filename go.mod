@@ -1,4 +1,4 @@
-module github.com/buqian/mermaidcat
+module github.com/zhengbuqian/mermaidcat
 
 go 1.25.0
 
