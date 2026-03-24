@@ -10,13 +10,16 @@ import (
 	"strings"
 )
 
+var version = "0.0.1"
+
 var (
-	expr       = flag.String("e", "", "Mermaid diagram string")
-	output     = flag.String("o", "", "Save image to file")
-	theme      = flag.String("theme", "", "Mermaid theme: dark|default|forest|neutral (auto-detect if empty)")
-	width      = flag.String("W", "", "Display width (passed to chafa)")
-	height     = flag.String("H", "", "Display height (passed to chafa)")
-	background = flag.String("bg", "transparent", "Mermaid background color")
+	expr        = flag.String("e", "", "Mermaid diagram string")
+	output      = flag.String("o", "", "Save image to file")
+	theme       = flag.String("theme", "", "Mermaid theme: dark|default|forest|neutral (auto-detect if empty)")
+	width       = flag.String("W", "", "Display width (passed to chafa)")
+	height      = flag.String("H", "", "Display height (passed to chafa)")
+	background  = flag.String("bg", "transparent", "Mermaid background color")
+	showVersion = flag.Bool("version", false, "Print version and exit")
 )
 
 func main() {
@@ -32,6 +35,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("mermaidcat %s\n", version)
+		os.Exit(0)
+	}
 
 	inputs, tmpFiles, err := resolveInput()
 	if err != nil {
