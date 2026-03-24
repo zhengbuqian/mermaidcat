@@ -11,3 +11,13 @@ imgcat
 # OS
 .DS_Store
 Thumbs.db
+
+# Test files
+tmp/
+*.mmd
+*.png
+*.svg
+
+# Docs (non-README)
+emb_list_architecture.md
+terminal-image-protocols-comparison.md

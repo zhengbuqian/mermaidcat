@@ -7,12 +7,9 @@ import (
 	"os/exec"
 )
 
-func render(inputPath, mermaidTheme, outPath string) error {
+func render(inputPath, mermaidTheme, outPath, terminal string) error {
 	if _, err := exec.LookPath("mmdc"); err != nil {
 		return fmt.Errorf("mmdc not found, install via: npm install -g @mermaid-js/mermaid-cli")
-	}
-	if _, err := exec.LookPath("chafa"); err != nil {
-		return fmt.Errorf("chafa not found, install via: brew install chafa (macOS) or apt install chafa (Linux)")
 	}
 
 	mmdcArgs := []string{
@@ -21,11 +18,49 @@ func render(inputPath, mermaidTheme, outPath string) error {
 		"--outputFormat", "png",
 		"-t", mermaidTheme,
 		"-b", *background,
+		"-w", "3200",
+		"-H", "2400",
 	}
 	mmdcCmd := exec.Command("mmdc", mmdcArgs...)
 	mmdcCmd.Stderr = os.Stderr
+	logf("mmdc command: mmdc %v", mmdcArgs)
+
+	if isIIPTerminal(terminal) {
+		logf("using iTerm2 IIP (terminal=%s)", terminal)
+		return renderIIP(mmdcCmd, outPath)
+	}
+	logf("using chafa (terminal=%q)", terminal)
+	return renderChafa(mmdcCmd, outPath)
+}
+
+// renderIIP reads mmdc output into memory and displays via iTerm2 IIP.
+func renderIIP(mmdcCmd *exec.Cmd, outPath string) error {
+	logf("running mmdc...")
+	imageData, err := mmdcCmd.Output()
+	if err != nil {
+		return fmt.Errorf("mmdc failed: %w", err)
+	}
+	logf("mmdc output: %d bytes PNG", len(imageData))
+
+	if outPath != "" {
+		logf("saving to: %s", outPath)
+		if err := os.WriteFile(outPath, imageData, 0644); err != nil {
+			return fmt.Errorf("writing output file: %w", err)
+		}
+	}
+
+	logf("displaying via iTerm2 IIP")
+	return displayIIP(imageData)
+}
+
+// renderChafa pipes mmdc output to chafa for display.
+func renderChafa(mmdcCmd *exec.Cmd, outPath string) error {
+	if _, err := exec.LookPath("chafa"); err != nil {
+		return fmt.Errorf("chafa not found, install via: brew install chafa (macOS) or apt install chafa (Linux)")
+	}
 
 	chafaArgs := buildChafaArgs()
+	logf("chafa command: chafa %v", chafaArgs)
 	chafaCmd := exec.Command("chafa", chafaArgs...)
 	chafaCmd.Stdout = os.Stdout
 	chafaCmd.Stderr = os.Stderr

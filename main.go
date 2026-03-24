@@ -44,7 +44,12 @@ func main() {
 		}
 	}()
 
-	mermaidTheme := resolveTheme()
+	logf("TERM_PROGRAM=%s, TERM=%s", os.Getenv("TERM_PROGRAM"), os.Getenv("TERM"))
+
+	// Detect terminal and theme in one probe
+	terminal, mermaidTheme := detectAll()
+	logf("input files: %v", inputs)
+	logf("terminal: %q, theme: %s", terminal, mermaidTheme)
 
 	for i, input := range inputs {
 		outPath := ""
@@ -57,7 +62,7 @@ func main() {
 				outPath = fmt.Sprintf("%s-%d%s", base, i+1, ext)
 			}
 		}
-		if err := render(input, mermaidTheme, outPath); err != nil {
+		if err := render(input, mermaidTheme, outPath, terminal); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

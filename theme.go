@@ -1,59 +1,6 @@
 package main
 
-import (
-	"fmt"
-	"os"
-	"time"
-)
-
-// resolveTheme returns the mermaid theme to use.
-// Priority: --theme flag > auto-detect via OSC 11 > fallback "dark".
-func resolveTheme() string {
-	if *theme != "" {
-		return *theme
-	}
-	if detected := detectTerminalBackground(); detected != "" {
-		return detected
-	}
-	return "dark"
-}
-
-// detectTerminalBackground queries the terminal background color via OSC 11
-// and returns "dark" or "default" based on perceived brightness.
-func detectTerminalBackground() string {
-	tty, err := os.Open("/dev/tty")
-	if err != nil {
-		return ""
-	}
-	defer tty.Close()
-
-	oldState, err := makeRaw(tty)
-	if err != nil {
-		return ""
-	}
-	defer restoreTerminal(tty, oldState)
-
-	// Send OSC 11 query
-	fmt.Fprint(tty, "\033]11;?\033\\")
-
-	result := make(chan string, 1)
-	go func() {
-		buf := make([]byte, 256)
-		n, err := tty.Read(buf)
-		if err != nil || n == 0 {
-			result <- ""
-			return
-		}
-		result <- string(buf[:n])
-	}()
-
-	select {
-	case resp := <-result:
-		return parseOSC11Response(resp)
-	case <-time.After(200 * time.Millisecond):
-		return ""
-	}
-}
+import "fmt"
 
 // parseOSC11Response parses "\033]11;rgb:RRRR/GGGG/BBBB\033\\" and returns
 // "dark" or "default" based on perceived brightness.
